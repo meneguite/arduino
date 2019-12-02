@@ -39,11 +39,12 @@ const int rtcSLCSensor = A5;
 const int valveSensor = 10;
 
 // Settings
-const long wateringTime = 1800;
-const int moistureLimit = 70;
+const long wateringTime = 180000;
+const int moistureLimit = 80;
 const float batteryLevelMinLimit = 2.0;
-const int wateringHours[] = { 10, 19 }; 
-const boolean debug = false;
+const int wateringHours[] = { 6, 14, 20 };
+const int wateringRepeats = 1;
+const boolean debug = true;
 const boolean wateringOnFirstRecovery = false;
 
 
@@ -52,7 +53,7 @@ boolean isWatering = false;
 float batteryLevel = 0;
 int currentMoisture = 0;
 DateTime currentDateTime;
-DateTime lastWatering = DateTime(2000, 1, 1, 0, 0, 0);
+DateTime lastWatering = DateTime(2010, 1, 1, 0, 0, 0);
 
 
 void setup() {
@@ -74,13 +75,14 @@ void startRtcModule() {
 
   if (! rtc.isrunning()) {
     printLn("RTC is NOT running!");
-    rtc.adjust(DateTime(2019, 11, 20, 17, 35, 0));
+    rtc.adjust(DateTime(2019, 12, 2, 16, 44, 0));
   }
 }
 
 int updateMoisture() {
-  int mapLow = 1018;
+  int mapLow = 1023;
   int mapHigh = 365;
+  
   int moistureValue = analogRead(moistureSensor);
 
   int moisture = map(moistureValue, mapLow, mapHigh, 0, 100);
@@ -93,14 +95,18 @@ float checkBatteryLevel() {
   return (float(batteryLevel) / 1023 ) * 5;
 }
 
-String formatDateTime(DateTime &date) {
+String formatResumeDateTime(DateTime &date, boolean seconds = false) {
   char bf[] = "DD/MM hh:mm";
+  return date.toString(bf);
+}
+String formatDateTime(DateTime &date, boolean seconds = false) {
+  char bf[] = "DD/MM/YYYY hh:mm:ss";
   return date.toString(bf);
 }
 
 void updateView () {
   lcd.begin(16, 2);
-  String line1 = (batteryLevel < batteryLevelMinLimit ? "*Alerta -> " : formatDateTime(currentDateTime));
+  String line1 = (batteryLevel < batteryLevelMinLimit ? "*Alerta -> " : formatResumeDateTime(currentDateTime));
   lcd.print(line1);
   lcd.print(" " + String(batteryLevel, 1) + "v");
  
@@ -111,14 +117,18 @@ void updateView () {
 
 boolean itsTimeForWatering() {
   printLn(formatDateTime(currentDateTime) + ": Check for its time for watering");
-  int diference = currentDateTime.unixtime() - lastWatering.unixtime();
+  long diference = currentDateTime.unixtime() - lastWatering.unixtime();
 
   if (wateringOnFirstRecovery && diference > 10000) {
       printLn("Watering first time");
       return true;
   }
   
-  if (diference < 3600 ) {
+  if (diference < (3600 / wateringRepeats) ) {
+    printLn("Watering has already been done in the period");
+    printLn("Current date: " + formatDateTime(currentDateTime));
+    printLn("Last watering: " + formatDateTime(lastWatering));
+    printLn("Diference: " + String(diference));
     return false;
   }
   
@@ -129,7 +139,8 @@ boolean itsTimeForWatering() {
       return true;
     }
   }
-  
+
+  printLn("It's not watering time");
   return false;
 }
 
@@ -149,7 +160,7 @@ boolean shouldWater() {
 void startWatering() {
   isWatering = true;
   lcd.begin(16, 2);
-  lcd.print("UR: " + formatDateTime(lastWatering));
+  lcd.print("UR: " + formatResumeDateTime(lastWatering));
   lcd.setCursor(0, 1);
   lcd.print("Aguando...        ");
   printLn(formatDateTime(currentDateTime) + ": Starting Watering..");
@@ -163,7 +174,8 @@ void startWatering() {
 
 void printLn(String message) {
   if (debug) {
-    Serial.println(message);
+    DateTime date = rtc.now();
+    Serial.println(formatDateTime(date) + ": " + message);
   }
 }
 
